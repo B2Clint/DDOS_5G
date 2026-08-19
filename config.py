@@ -23,6 +23,7 @@ LABEL_COLUMN   = "label"
 NORMAL_LABEL   = "benign"
 TEST_SIZE      = 0.2
 RANDOM_STATE   = 42
+NUM_PARALLEL_WORKERS = 4   # ou toute valeur appropriée
 
 # ── Apprentissage fédéré ──────────────────────────────────────────────────────
 NUM_SILOS          = 3
