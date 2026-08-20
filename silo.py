@@ -57,6 +57,11 @@ class FederatedSilo:
         self.server_public_key = server_public_key
         self.silo_private_key  = silo_private_key
 
+        # Taille de batch effective utilisée par le pipeline tf.data
+        # (exposée séparément de config.BATCH_SIZE pour permettre, plus tard,
+        # un ajustement par silo sans toucher à la config globale).
+        self.global_batch_size = config.BATCH_SIZE
+
         # Construire le modèle local
         self.model = build_cnn_model(n_features, n_classes)
 
@@ -87,6 +92,32 @@ class FederatedSilo:
         # les labels mixtes, on garde le label dominant)
         y_mix = np.where(lam >= 0.5, y, y[perm])
         return X_mix, y_mix
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # [NOUVEAU] Pipeline tf.data
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _make_dataset(self, X: np.ndarray, y: np.ndarray,
+                       shuffle: bool = True) -> tf.data.Dataset:
+        """
+        Construit un tf.data.Dataset batché à partir de tableaux numpy.
+
+        - X est casté en float32, y en int64 (types attendus par le modèle
+          et par sparse_categorical_crossentropy).
+        - shuffle=True mélange l'intégralité du buffer (taille = len(X)),
+          ce qui est raisonnable vu la taille d'une partition par silo.
+        - .prefetch(AUTOTUNE) recouvre le chargement des batches suivants
+          avec le calcul GPU/CPU du batch courant.
+        """
+        X = tf.cast(X, tf.float32)
+        y = tf.cast(y, tf.int64)
+        ds = tf.data.Dataset.from_tensor_slices((X, y))
+        if shuffle:
+            ds = ds.shuffle(buffer_size=len(X), seed=config.RANDOM_STATE,
+                            reshuffle_each_iteration=True)
+        ds = ds.batch(self.global_batch_size)
+        ds = ds.prefetch(tf.data.AUTOTUNE)
+        return ds
 
     # ─────────────────────────────────────────────────────────────────────────
     # [FIX 3c] Seuil optimal
@@ -167,12 +198,14 @@ class FederatedSilo:
         class_weight_dict = dict(zip(classes, weights))
         print(f"[Silo {self.silo_id}] Class weights : {class_weight_dict}")
 
-        # 6. Entraînement sur données augmentées MixUp
+        # 6. Entraînement sur données augmentées MixUp (pipeline tf.data)
+        train_ds = self._make_dataset(X_aug, y_aug, shuffle=True)
+        val_ds   = self._make_dataset(self.X_val, self.y_val, shuffle=False)
+
         hist = self.model.fit(
-            X_aug, y_aug,
+            train_ds,
             epochs=config.LOCAL_EPOCHS,
-            batch_size=config.BATCH_SIZE,
-            validation_data=(self.X_val, self.y_val),
+            validation_data=val_ds,
             class_weight=class_weight_dict,
             callbacks=callbacks,
             verbose=1 if config.VERBOSE else 0
