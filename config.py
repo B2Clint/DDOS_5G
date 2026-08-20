@@ -23,13 +23,19 @@ LABEL_COLUMN   = "label"
 NORMAL_LABEL   = "benign"
 TEST_SIZE      = 0.2
 RANDOM_STATE   = 42
-NUM_PARALLEL_WORKERS = 4   # ou toute valeur appropriée
 
 # ── Apprentissage fédéré ──────────────────────────────────────────────────────
 NUM_SILOS          = 3
 FEDERATED_ROUNDS   = 20
 LOCAL_EPOCHS       = 10
 BATCH_SIZE         = 128
+
+# ── [NOUVEAU] Parallélisme ─────────────────────────────────────────────────────
+# Nombre de silos entraînés SIMULTANÉMENT à chaque round (via ThreadPoolExecutor
+# dans main.py). Avant, tous les silos démarraient en même temps sans limite,
+# ce qui peut surcharger le CPU quand NUM_SILOS augmente. On plafonne ici.
+# Règle de sécurité testée : NUM_SILOS * NUM_PARALLEL_WORKERS <= 2 * cpu_count().
+NUM_PARALLEL_WORKERS = 1
 
 # ── Modèle CNN ────────────────────────────────────────────────────────────────
 LEARNING_RATE  = 1e-4
