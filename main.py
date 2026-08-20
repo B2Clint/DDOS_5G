@@ -20,11 +20,11 @@ Pipeline complet :
 """
 
 import os
-import threading
 import time
 import argparse
 import numpy as np
 import tensorflow as tf
+from concurrent.futures import ThreadPoolExecutor
 
 # ── Modules du projet ─────────────────────────────────────────────────────────
 import config
@@ -129,19 +129,17 @@ def main():
         server.start_listener(fed_round)
         time.sleep(1.5)   # laisser le socket s'ouvrir
 
-        silo_threads = []
-        for silo in silos:
-            t = threading.Thread(
-                target=_silo_round,
-                args=(silo, global_weights, fed_round),
-                daemon=True
-            )
-            silo_threads.append(t)
-
-        for t in silo_threads:
-            t.start()
-        for t in silo_threads:
-            t.join()
+        # [NOUVEAU] Entraînement des silos avec parallélisme borné :
+        # au plus config.NUM_PARALLEL_WORKERS silos s'entraînent en même
+        # temps (au lieu d'un thread par silo sans limite), pour éviter
+        # de surcharger le CPU quand NUM_SILOS est grand.
+        with ThreadPoolExecutor(max_workers=config.NUM_PARALLEL_WORKERS) as pool:
+            futures = [
+                pool.submit(_silo_round, silo, global_weights, fed_round)
+                for silo in silos
+            ]
+            for f in futures:
+                f.result()   # relève toute exception survenue dans un silo
 
         server.wait_for_round(timeout=600)
         global_weights = server.get_global_weights()
