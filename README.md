@@ -25,12 +25,3 @@ Les résultats obtenus via ce modèle devront être comparés à ceux du modèle
 -	Les indicateurs importants tels que l'exactitude, la précision, la sensibilité, la spécificité et le score F1 doivent être évalués.
 -	Un schéma explicatif global du modèle ainsi que l’algorithme d’optimisation utilisé.
 <br>
-pre-réquis:
-tensorflow>=2.12.0
-numpy>=1.23.0
-pandas>=1.5.0
-scikit-learn>=1.2.0
-matplotlib>=3.6.0
-
-seaborn>=0.12.0
-cryptography>=41.0.0
